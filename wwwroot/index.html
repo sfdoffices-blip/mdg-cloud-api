@@ -4,29 +4,50 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MDG Mobile</title>
+<style>
+body{font-family:Arial;margin:10px}
+input,select,textarea,button{width:100%;margin:5px 0;padding:8px}
+.ok{color:green}
+.err{color:red}
+li{margin:4px 0}
+</style>
+
+<script>
+if('Notification' in window){ Notification.requestPermission(); }
+function notify(msg){
+  if(Notification.permission==="granted"){
+    new Notification("MDG Maintenance", { body: msg });
+  }
+}
+</script>
 </head>
-<body style="font-family:Arial;padding:10px">
 
-<h2>MDG Maintenance</h2>
+<body>
 
-<label>Utilisateur</label><br>
-<input id="user" placeholder="Nom utilisateur"/><br><br>
+<h2>MDG Mobile</h2>
 
-<label>Machine</label><br>
-<input id="machine" placeholder="Machine"/><br><br>
+<label>Utilisateur</label>
+<input id="user" placeholder="Nom"/>
 
-<label>Type</label><br>
+<label>Machine</label>
+<input id="machine" placeholder="Machine"/>
+
+<label>Type</label>
 <select id="type">
   <option>Entretien</option>
   <option>Panne</option>
-</select><br><br>
+</select>
 
-<label>Description</label><br>
-<textarea id="desc"></textarea><br><br>
+<label>Description</label>
+<textarea id="desc"></textarea>
 
 <button onclick="send()">Envoyer</button>
-
 <p id="msg"></p>
+
+<hr>
+<h3>Entretiens à faire</h3>
+<button onclick="loadPreventif()">Actualiser</button>
+<ul id="pList"></ul>
 
 <script>
 function send(){
@@ -44,10 +65,29 @@ function send(){
     body:JSON.stringify(data)
   })
   .then(r=>r.ok?"OK":"Erreur")
-  .then(t=>msg.innerText="Envoyé ✅")
-  .catch(e=>msg.innerText="Hors ligne ❌");
+  .then(_=>msg.innerHTML="<span class='ok'>Envoyé ✅</span>")
+  .catch(_=>msg.innerHTML="<span class='err'>Hors ligne ❌</span>");
+}
+
+function loadPreventif(){
+  fetch("/preventif")
+  .then(r=>r.json())
+  .then(list=>{
+    pList.innerHTML="";
+    let today = new Date().toISOString().substring(0,10);
+    list.forEach(i=>{
+      let li = document.createElement("li");
+      li.innerText = `${i.machine} - ${i.type} - ${i.prochaine}`;
+      pList.appendChild(li);
+
+      if(i.prochaine <= today){
+        notify("Entretien : " + i.machine + " (" + i.type + ")");
+      }
+    });
+  });
 }
 </script>
 
 </body>
 </html>
+
