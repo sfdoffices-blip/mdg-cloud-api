@@ -10,6 +10,8 @@ input,select,textarea,button{width:100%;margin:5px 0;padding:8px}
 .ok{color:green}
 .err{color:red}
 li{margin:4px 0}
+.machine{font-weight:bold}
+.tache{font-style:italic;font-size:0.9em}
 </style>
 
 <script>
@@ -77,11 +79,14 @@ function loadPreventif(){
     let today = new Date().toISOString().substring(0,10);
     list.forEach(i=>{
       let li = document.createElement("li");
-      li.innerText = `${i.machine} - ${i.type} - ${i.prochaine}`;
+      li.innerHTML = `
+        <span class="machine">${i.machine}</span> - ${i.type} - ${i.prochaine}<br>
+        <span class="tache">${i.tache}</span>
+      `;
       pList.appendChild(li);
 
       if(i.prochaine <= today){
-        notify("Entretien : " + i.machine + " (" + i.type + ")");
+        notify("Entretien : " + i.machine + " (" + i.type + ") - " + i.tache);
       }
     });
   });
