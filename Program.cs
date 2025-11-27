@@ -31,8 +31,7 @@ void InitDb()
 
 InitDb();
 
-// --- API ---
-
+// --- API : AJOUT INTERVENTION DEPUIS MOBILE ---
 app.MapPost("/add", async (HttpContext ctx) =>
 {
     var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
@@ -56,6 +55,7 @@ app.MapPost("/add", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
+// --- LISTE POUR SYNC PC ---
 app.MapGet("/list", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -68,7 +68,8 @@ app.MapGet("/list", () =>
     using var r = cmd.ExecuteReader();
     while (r.Read())
     {
-        list.Add(new {
+        list.Add(new
+        {
             Id = r.GetInt64(0),
             Machine = r.GetString(1),
             Type = r.GetString(2),
@@ -80,6 +81,23 @@ app.MapGet("/list", () =>
 
     return Results.Json(list);
 });
+
+// --- CLEAR : SUPPRIME TOUT APRÈS IMPORT ---
+app.MapPost("/clear", () =>
+{
+    using var con = new SqliteConnection($"Data Source={db}");
+    con.Open();
+
+    using var cmd = con.CreateCommand();
+    cmd.CommandText = "DELETE FROM Interventions";
+    cmd.ExecuteNonQuery();
+
+    return Results.Ok();
+});
+
+// --- SERVIR LA PAGE MOBILE (wwwroot/index.html) ---
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
 app.Run();
+
