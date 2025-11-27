@@ -25,13 +25,21 @@ void InitDb()
         User TEXT,
         Description TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS Preventif (
+        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Machine TEXT,
+        FrequenceType TEXT,
+        ProchaineDate TEXT
+    );
     ";
     cmd.ExecuteNonQuery();
 }
 
 InitDb();
 
-// --- API : AJOUT INTERVENTION DEPUIS MOBILE ---
+// ---------- INTERVENTIONS MOBILE ----------
+
 app.MapPost("/add", async (HttpContext ctx) =>
 {
     var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
@@ -43,26 +51,17 @@ app.MapPost("/add", async (HttpContext ctx) =>
     cmd.CommandText = @"
         INSERT INTO Interventions (Machine, Type, Date, User, Description)
         VALUES ($m,$t,$d,$u,$desc)";
-
     cmd.Parameters.AddWithValue("$m", obj["machine"]);
     cmd.Parameters.AddWithValue("$t", obj["type"]);
     cmd.Parameters.AddWithValue("$d", obj["date"]);
     cmd.Parameters.AddWithValue("$u", obj["user"]);
     cmd.Parameters.AddWithValue("$desc", obj["desc"]);
-
     cmd.ExecuteNonQuery();
 
     return Results.Ok();
 });
 
-// --- LISTE POUR SYNC PC ---
 app.MapGet("/list", () =>
-           app.MapGet("/preventif", () =>
-{
-    // Cette API sera remplie par le PC MDG dans l'étape suivante
-    // Pour l'instant elle retourne vide
-    return Results.Json(new List<object>());
-});
 {
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
@@ -74,8 +73,7 @@ app.MapGet("/list", () =>
     using var r = cmd.ExecuteReader();
     while (r.Read())
     {
-        list.Add(new
-        {
+        list.Add(new {
             Id = r.GetInt64(0),
             Machine = r.GetString(1),
             Type = r.GetString(2),
@@ -84,24 +82,72 @@ app.MapGet("/list", () =>
             Description = r.GetString(5)
         });
     }
-
     return Results.Json(list);
 });
 
-// --- CLEAR : SUPPRIME TOUT APRÈS IMPORT ---
+// ----- CLEAR CLOUD APRÈS IMPORT PC -----
+
 app.MapPost("/clear", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
-
     using var cmd = con.CreateCommand();
     cmd.CommandText = "DELETE FROM Interventions";
     cmd.ExecuteNonQuery();
-
     return Results.Ok();
 });
 
-// --- SERVIR LA PAGE MOBILE (wwwroot/index.html) ---
+// ---------- PRÉVENTIF ----------
+
+// PC envoie ses préventifs
+app.MapPost("/preventif", async (HttpContext ctx) =>
+{
+    var list = await JsonSerializer.DeserializeAsync<List<Dictionary<string, string>>>(ctx.Request.Body);
+
+    using var con = new SqliteConnection($"Data Source={db}");
+    con.Open();
+
+    using var clear = con.CreateCommand();
+    clear.CommandText = "DELETE FROM Preventif";
+    clear.ExecuteNonQuery();
+
+    foreach (var p in list)
+    {
+        using var ins = con.CreateCommand();
+        ins.CommandText = @"
+            INSERT INTO Preventif (Machine, FrequenceType, ProchaineDate)
+            VALUES ($m,$t,$d)";
+        ins.Parameters.AddWithValue("$m", p["machine"]);
+        ins.Parameters.AddWithValue("$t", p["type"]);
+        ins.Parameters.AddWithValue("$d", p["prochaine"]);
+        ins.ExecuteNonQuery();
+    }
+    return Results.Ok();
+});
+
+// Téléphone lit la liste
+app.MapGet("/preventif", () =>
+{
+    using var con = new SqliteConnection($"Data Source={db}");
+    con.Open();
+
+    var list = new List<object>();
+    using var cmd = con.CreateCommand();
+    cmd.CommandText = "SELECT * FROM Preventif";
+
+    using var r = cmd.ExecuteReader();
+    while (r.Read())
+    {
+        list.Add(new {
+            Machine = r.GetString(1),
+            Type = r.GetString(2),
+            Prochaine = r.GetString(3)
+        });
+    }
+    return Results.Json(list);
+});
+
+// ---------- PAGE MOBILE ----------
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
