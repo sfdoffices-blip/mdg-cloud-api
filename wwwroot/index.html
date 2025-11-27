@@ -9,7 +9,7 @@ body{font-family:Arial;margin:10px}
 input,select,textarea,button{width:100%;margin:5px 0;padding:8px}
 .ok{color:green}
 .err{color:red}
-li{margin:4px 0}
+li{margin:6px 0}
 .machine{font-weight:bold}
 .tache{font-style:italic;font-size:0.9em}
 </style>
@@ -77,19 +77,49 @@ function loadPreventif(){
   .then(list=>{
     pList.innerHTML="";
     let today = new Date().toISOString().substring(0,10);
+
     list.forEach(i=>{
+      let uid = (i.machine || "").replace(/\s+/g,'_');
+
       let li = document.createElement("li");
       li.innerHTML = `
-        <span class="machine">${i.machine}</span> - ${i.type} - ${i.prochaine}<br>
-        <span class="tache">${i.tache}</span>
+        <div class="machine">${i.machine}</div>
+        ${i.type} - ${i.prochaine}<br>
+        <div class="tache">${i.tache || ""}</div>
+        <select id="op_${uid}">
+          <option>Mostapha</option>
+          <option>Jawad</option>
+          <option>Abdelillah</option>
+        </select>
+        <button onclick="valider('${i.machine}','${(i.tache||"").replace(/'/g,"\\'")}')">✅ Valider</button>
+        <hr>
       `;
       pList.appendChild(li);
 
       if(i.prochaine <= today){
-        notify("Entretien : " + i.machine + " (" + i.type + ") - " + i.tache);
+        notify("Entretien : " + i.machine + " — " + (i.tache||""));
       }
     });
   });
+}
+
+function valider(machine, tache){
+  let uid = (machine || "").replace(/\s+/g,'_');
+  let op = document.getElementById("op_"+uid).value;
+
+  let payload = {
+    machine: machine,
+    operateur: op,
+    tache: tache,
+    date: new Date().toISOString().substring(0,10)
+  };
+
+  fetch("/validate",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(payload)
+  })
+  .then(_=>alert("✅ Entretien validé par " + op))
 }
 </script>
 
