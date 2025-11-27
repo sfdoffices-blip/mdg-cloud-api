@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Data.Sqlite;
@@ -39,7 +38,7 @@ void InitDb()
 
 InitDb();
 
-// ---------- INTERVENTIONS MOBILE ----------
+// ---------- INTERVENTIONS MOBILE (déclaration) ----------
 app.MapPost("/add", async (HttpContext ctx) =>
 {
     var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
@@ -61,6 +60,7 @@ app.MapPost("/add", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
+// ---------- LISTE POUR SYNC PC ----------
 app.MapGet("/list", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -85,7 +85,7 @@ app.MapGet("/list", () =>
     return Results.Json(list);
 });
 
-// ----- CLEAR CLOUD APRÈS IMPORT PC -----
+// ---------- CLEAR CLOUD (après import PC) ----------
 app.MapPost("/clear", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -96,9 +96,7 @@ app.MapPost("/clear", () =>
     return Results.Ok();
 });
 
-// ---------- PREVENTIF ----------
-
-// PC envoie ses préventifs
+// ---------- PREVENTIF : PC -> CLOUD ----------
 app.MapPost("/preventif", async (HttpContext ctx) =>
 {
     var list = await JsonSerializer.DeserializeAsync<List<Dictionary<string, string>>>(ctx.Request.Body);
@@ -110,22 +108,26 @@ app.MapPost("/preventif", async (HttpContext ctx) =>
     clear.CommandText = "DELETE FROM Preventif";
     clear.ExecuteNonQuery();
 
-    foreach (var p in list)
+    if (list != null)
     {
-        using var ins = con.CreateCommand();
-        ins.CommandText = @"
-            INSERT INTO Preventif (Machine, FrequenceType, ProchaineDate, Tache)
-            VALUES ($m,$t,$d,$ta)";
-        ins.Parameters.AddWithValue("$m", p["machine"]);
-        ins.Parameters.AddWithValue("$t", p["type"]);
-        ins.Parameters.AddWithValue("$d", p["prochaine"]);
-        ins.Parameters.AddWithValue("$ta", p["tache"]);
-        ins.ExecuteNonQuery();
+        foreach (var p in list)
+        {
+            using var ins = con.CreateCommand();
+            ins.CommandText = @"
+                INSERT INTO Preventif (Machine, FrequenceType, ProchaineDate, Tache)
+                VALUES ($m,$t,$d,$ta)";
+            ins.Parameters.AddWithValue("$m", p["machine"]);
+            ins.Parameters.AddWithValue("$t", p["type"]);
+            ins.Parameters.AddWithValue("$d", p["prochaine"]);
+            ins.Parameters.AddWithValue("$ta", p.ContainsKey("tache") ? p["tache"] : "");
+            ins.ExecuteNonQuery();
+        }
     }
+
     return Results.Ok();
 });
 
-// Téléphone lit la liste
+// ---------- PREVENTIF : TELEPHONE <- CLOUD ----------
 app.MapGet("/preventif", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -142,10 +144,31 @@ app.MapGet("/preventif", () =>
             Machine = r.GetString(1),
             Type = r.GetString(2),
             Prochaine = r.GetString(3),
-            Tache = r.GetString(4)
+            Tache = r.IsDBNull(4) ? "" : r.GetString(4)
         });
     }
     return Results.Json(list);
+});
+
+// ---------- VALIDATION DEPUIS TELEPHONE ----------
+app.MapPost("/validate", async (HttpContext ctx) =>
+{
+    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>(ctx.Request.Body);
+
+    using var con = new SqliteConnection($"Data Source={db}");
+    con.Open();
+
+    using var cmd = con.CreateCommand();
+    cmd.CommandText = @"
+        INSERT INTO Interventions (Machine, Type, Date, User, Description)
+        VALUES ($m,'Entretien',$d,$u,$desc)";
+    cmd.Parameters.AddWithValue("$m", obj["machine"]);
+    cmd.Parameters.AddWithValue("$d", obj["date"]);
+    cmd.Parameters.AddWithValue("$u", obj["operateur"]);
+    cmd.Parameters.AddWithValue("$desc", obj["tache"]);
+    cmd.ExecuteNonQuery();
+
+    return Results.Ok();
 });
 
 // ---------- PAGE MOBILE ----------
@@ -153,5 +176,4 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.Run();
-
 
