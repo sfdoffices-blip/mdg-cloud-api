@@ -57,6 +57,12 @@ app.MapPost("/add", async (HttpContext ctx) =>
 
 // --- LISTE POUR SYNC PC ---
 app.MapGet("/list", () =>
+           app.MapGet("/preventif", () =>
+{
+    // Cette API sera remplie par le PC MDG dans l'étape suivante
+    // Pour l'instant elle retourne vide
+    return Results.Json(new List<object>());
+});
 {
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
