@@ -80,5 +80,6 @@ app.MapGet("/list", () =>
 
     return Results.Json(list);
 });
-
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.Run();
