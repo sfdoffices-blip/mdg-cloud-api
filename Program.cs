@@ -30,7 +30,8 @@ void InitDb()
         Id INTEGER PRIMARY KEY AUTOINCREMENT,
         Machine TEXT,
         FrequenceType TEXT,
-        ProchaineDate TEXT
+        ProchaineDate TEXT,
+        Tache TEXT
     );
     ";
     cmd.ExecuteNonQuery();
@@ -39,7 +40,6 @@ void InitDb()
 InitDb();
 
 // ---------- INTERVENTIONS MOBILE ----------
-
 app.MapPost("/add", async (HttpContext ctx) =>
 {
     var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
@@ -86,7 +86,6 @@ app.MapGet("/list", () =>
 });
 
 // ----- CLEAR CLOUD APRÈS IMPORT PC -----
-
 app.MapPost("/clear", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -97,7 +96,7 @@ app.MapPost("/clear", () =>
     return Results.Ok();
 });
 
-// ---------- PRÉVENTIF ----------
+// ---------- PREVENTIF ----------
 
 // PC envoie ses préventifs
 app.MapPost("/preventif", async (HttpContext ctx) =>
@@ -115,11 +114,12 @@ app.MapPost("/preventif", async (HttpContext ctx) =>
     {
         using var ins = con.CreateCommand();
         ins.CommandText = @"
-            INSERT INTO Preventif (Machine, FrequenceType, ProchaineDate)
-            VALUES ($m,$t,$d)";
+            INSERT INTO Preventif (Machine, FrequenceType, ProchaineDate, Tache)
+            VALUES ($m,$t,$d,$ta)";
         ins.Parameters.AddWithValue("$m", p["machine"]);
         ins.Parameters.AddWithValue("$t", p["type"]);
         ins.Parameters.AddWithValue("$d", p["prochaine"]);
+        ins.Parameters.AddWithValue("$ta", p["tache"]);
         ins.ExecuteNonQuery();
     }
     return Results.Ok();
@@ -141,7 +141,8 @@ app.MapGet("/preventif", () =>
         list.Add(new {
             Machine = r.GetString(1),
             Type = r.GetString(2),
-            Prochaine = r.GetString(3)
+            Prochaine = r.GetString(3),
+            Tache = r.GetString(4)
         });
     }
     return Results.Json(list);
@@ -152,4 +153,5 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.Run();
+
 
