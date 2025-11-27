@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MDG Mobile</title>
+</head>
+<body style="font-family:Arial;padding:10px">
+
+<h2>MDG Maintenance</h2>
+
+<label>Utilisateur</label><br>
+<input id="user" placeholder="Nom utilisateur"/><br><br>
+
+<label>Machine</label><br>
+<input id="machine" placeholder="Machine"/><br><br>
+
+<label>Type</label><br>
+<select id="type">
+  <option>Entretien</option>
+  <option>Panne</option>
+</select><br><br>
+
+<label>Description</label><br>
+<textarea id="desc"></textarea><br><br>
+
+<button onclick="send()">Envoyer</button>
+
+<p id="msg"></p>
+
+<script>
+function send(){
+  const data = {
+    user: user.value,
+    machine: machine.value,
+    type: type.value,
+    desc: desc.value,
+    date: new Date().toISOString().substring(0,10)
+  };
+
+  fetch("/add",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(data)
+  })
+  .then(r=>r.ok?"OK":"Erreur")
+  .then(t=>msg.innerText="Envoyé ✅")
+  .catch(e=>msg.innerText="Hors ligne ❌");
+}
+</script>
+
+</body>
+</html>
