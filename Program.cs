@@ -9,13 +9,20 @@ using System.Collections.Generic;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
-string dbPath = "mdg.db";
+// --- Dossier web (pages téléphone)
+app.UseDefaultFiles();   // index.html par défaut
+app.UseStaticFiles();    // wwwroot
 
+// --- Base SQLite
+string dbPath = "mdg.db";
+string connStr = $"Data Source={dbPath}";
+
+// --- Initialisation DB
 void InitDb()
 {
     if (!File.Exists(dbPath))
     {
-        using var c = new SqliteConnection($"Data Source={dbPath}");
+        using var c = new SqliteConnection(connStr);
         c.Open();
 
         var cmd = c.CreateCommand();
@@ -27,41 +34,74 @@ void InitDb()
             Frequence TEXT,
             DateProchaine TEXT,
             Effectue INTEGER DEFAULT 0
-        );";
+        );
+
+        CREATE TABLE IF NOT EXISTS Machines (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Nom TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS Interventions (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Machine TEXT,
+            Type TEXT,
+            Description TEXT,
+            Operateur TEXT,
+            DateHeure TEXT
+        );
+        ";
         cmd.ExecuteNonQuery();
     }
 }
-
 InitDb();
 
+// ----------------------------------------------------
+// ✅ PAGE TEST
+app.MapGet("/api", () => "MDG API OK");
 
-
-// ✅ TEST API
-app.MapGet("/", () => "MDG API OK");
-
-
-// ✅ RECEPTION DES PREVENTIFS
+// ----------------------------------------------------
+// ✅ PREVENTIFS : PC → CLOUD (envoi liste ou unitaire)
+// Accepte soit un objet, soit une liste
 app.MapPost("/preventifs", async (HttpRequest request) =>
 {
     try
     {
-        var dto = await JsonSerializer.DeserializeAsync<PreventifDTO>(request.Body);
+        using var doc = await JsonDocument.ParseAsync(request.Body);
+        var root = doc.RootElement;
 
-        using var c = new SqliteConnection($"Data Source={dbPath}");
+        using var c = new SqliteConnection(connStr);
         c.Open();
-        var cmd = c.CreateCommand();
-        cmd.CommandText = @"
-            INSERT INTO Preventifs (Machine, Tache, Frequence, DateProchaine, Effectue)
-            VALUES (@m,@t,@f,@d,0);
-        ";
 
-        cmd.Parameters.AddWithValue("@m", dto.Machine);
-        cmd.Parameters.AddWithValue("@t", dto.Tache);
-        cmd.Parameters.AddWithValue("@f", dto.Frequence);
-        cmd.Parameters.AddWithValue("@d", dto.DateProchaine);
-        cmd.ExecuteNonQuery();
+        void InsertOne(JsonElement e)
+        {
+            var cmd = c.CreateCommand();
+            cmd.CommandText = @"
+                INSERT INTO Preventifs (Machine, Tache, Frequence, DateProchaine, Effectue)
+                VALUES (@m,@t,@f,@d,@e);
+            ";
+            cmd.Parameters.AddWithValue("@m", e.GetProperty("machine").GetString());
+            cmd.Parameters.AddWithValue("@t", e.GetProperty("tache").GetString());
+            cmd.Parameters.AddWithValue("@f", e.GetProperty("frequence").GetString());
+            cmd.Parameters.AddWithValue("@d", e.GetProperty("dateProchaine").GetString());
+            cmd.Parameters.AddWithValue("@e", e.TryGetProperty("effectue", out var ef) ? ef.GetInt32() : 0);
+            cmd.ExecuteNonQuery();
+        }
 
-        return Results.Ok("Envoyé ✅");
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var e in root.EnumerateArray())
+                InsertOne(e);
+        }
+        else if (root.ValueKind == JsonValueKind.Object)
+        {
+            InsertOne(root);
+        }
+        else
+        {
+            return Results.BadRequest("JSON invalide");
+        }
+
+        return Results.Ok("Envoyé au cloud ✅");
     }
     catch (System.Exception ex)
     {
@@ -69,40 +109,40 @@ app.MapPost("/preventifs", async (HttpRequest request) =>
     }
 });
 
-
-// ✅ LISTE TELEPHONE
+// ----------------------------------------------------
+// ✅ PREVENTIFS : TELEPHONE ← CLOUD (liste des non faits)
 app.MapGet("/preventifs", () =>
 {
-    using var c = new SqliteConnection($"Data Source={dbPath}");
+    using var c = new SqliteConnection(connStr);
     c.Open();
 
     var cmd = c.CreateCommand();
     cmd.CommandText = "SELECT * FROM Preventifs WHERE Effectue = 0";
 
     var r = cmd.ExecuteReader();
-    var list = new List<PreventifDTO>();
+    var list = new List<object>();
 
     while (r.Read())
     {
-        list.Add(new PreventifDTO
+        list.Add(new
         {
-            Id = r.GetInt32(0),
-            Machine = r.GetString(1),
-            Tache = r.GetString(2),
-            Frequence = r.GetString(3),
-            DateProchaine = r.GetString(4),
-            Effectue = r.GetInt32(5)
+            id = r.GetInt32(0),
+            machine = r.GetString(1),
+            tache = r.GetString(2),
+            frequence = r.GetString(3),
+            dateProchaine = r.GetString(4),
+            effectue = r.GetInt32(5)
         });
     }
 
     return list;
 });
 
-
-// ✅ VALIDATION DEPUIS TELEPHONE
+// ----------------------------------------------------
+// ✅ VALIDER UN PREVENTIF DEPUIS TELEPHONE
 app.MapPut("/preventifs/{id}", (int id) =>
 {
-    using var c = new SqliteConnection($"Data Source={dbPath}");
+    using var c = new SqliteConnection(connStr);
     c.Open();
 
     var cmd = c.CreateCommand();
@@ -113,19 +153,88 @@ app.MapPut("/preventifs/{id}", (int id) =>
     return Results.Ok("Validé ✅");
 });
 
+// ----------------------------------------------------
+// ✅ MACHINES : pour liste sur téléphone
+app.MapGet("/machines", () =>
+{
+    using var c = new SqliteConnection(connStr);
+    c.Open();
+
+    var cmd = c.CreateCommand();
+    cmd.CommandText = "SELECT Nom FROM Machines ORDER BY Nom";
+
+    var r = cmd.ExecuteReader();
+    var list = new List<object>();
+
+    while (r.Read())
+    {
+        list.Add(new { nom = r.GetString(0) });
+    }
+
+    return list;
+});
+
+// ----------------------------------------------------
+// ✅ Interventions NON PLANIFIÉES depuis téléphone
+app.MapPost("/interventions", async (HttpRequest request) =>
+{
+    try
+    {
+        var dto = await JsonSerializer.DeserializeAsync<InterventionDTO>(request.Body);
+
+        using var c = new SqliteConnection(connStr);
+        c.Open();
+
+        var cmd = c.CreateCommand();
+        cmd.CommandText = @"
+            INSERT INTO Interventions (Machine, Type, Description, Operateur, DateHeure)
+            VALUES (@m,@t,@d,@o,@dh);
+        ";
+        cmd.Parameters.AddWithValue("@m", dto.machine);
+        cmd.Parameters.AddWithValue("@t", dto.type);
+        cmd.Parameters.AddWithValue("@d", dto.description);
+        cmd.Parameters.AddWithValue("@o", dto.operateur);
+        cmd.Parameters.AddWithValue("@dh", System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        cmd.ExecuteNonQuery();
+
+        return Results.Ok("Intervention envoyée ✅");
+    }
+    catch (System.Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
+
+// ----------------------------------------------------
+// ✅ Interventions (pour import côté PC plus tard)
+app.MapGet("/interventions", () =>
+{
+    using var c = new SqliteConnection(connStr);
+    c.Open();
+
+    var cmd = c.CreateCommand();
+    cmd.CommandText = "SELECT * FROM Interventions ORDER BY Id DESC";
+
+    var r = cmd.ExecuteReader();
+    var list = new List<object>();
+
+    while (r.Read())
+    {
+        list.Add(new
+        {
+            id = r.GetInt32(0),
+            machine = r.GetString(1),
+            type = r.GetString(2),
+            description = r.GetString(3),
+            operateur = r.GetString(4),
+            dateHeure = r.GetString(5)
+        });
+    }
+
+    return list;
+});
 
 app.Run();
 
-
-
-// ✅ OBJET TRANSFERT
-public class PreventifDTO
-{
-    public int Id { get; set; }
-    public string Machine { get; set; }
-    public string Tache { get; set; }
-    public string Frequence { get; set; }
-    public string DateProchaine { get; set; }
-    public int Effectue { get; set; }
-}
-
+public record InterventionDTO(string machine, string type, string description, string operateur);
