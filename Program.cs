@@ -9,6 +9,7 @@ var app = builder.Build();
 
 string db = "mdg_cloud.db";
 
+// ========== INIT DB ==========
 void InitDb()
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -31,20 +32,18 @@ void InitDb()
         FrequenceType TEXT,
         ProchaineDate TEXT,
         Tache TEXT
-    );
-    ";
+    );";
     cmd.ExecuteNonQuery();
 }
-
 InitDb();
 
 
 // ========================
-// INTERVENTIONS CLASSIQUES
+// POST /add : déclaration mobile
 // ========================
 app.MapPost("/add", async (HttpContext ctx) =>
 {
-    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>(ctx.Request.Body);
+    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
 
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
@@ -63,9 +62,8 @@ app.MapPost("/add", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
-
 // ========================
-// LISTE POUR SYNC PC
+// GET /list : PC récupère
 // ========================
 app.MapGet("/list", () =>
 {
@@ -88,29 +86,24 @@ app.MapGet("/list", () =>
             Description = r.GetString(5)
         });
     }
-
     return Results.Json(list);
 });
 
-
 // ========================
-// NETTOYAGE CLOUD
+// POST /clear : vider cloud
 // ========================
 app.MapPost("/clear", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
-
     using var cmd = con.CreateCommand();
     cmd.CommandText = "DELETE FROM Interventions";
     cmd.ExecuteNonQuery();
-
     return Results.Ok();
 });
 
-
 // ========================
-// PRÉVENTIF
+// POST /preventif : PC -> cloud
 // ========================
 app.MapPost("/preventif", async (HttpContext ctx) =>
 {
@@ -141,6 +134,9 @@ app.MapPost("/preventif", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
+// ========================
+// GET /preventif : mobile liste
+// ========================
 app.MapGet("/preventif", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -160,23 +156,20 @@ app.MapGet("/preventif", () =>
             Tache = r.IsDBNull(4) ? "" : r.GetString(4)
         });
     }
-
     return Results.Json(list);
 });
 
-
 // ========================
-// ✅ VALIDATION DEPUIS TEL
-// ➜ Enregistre ET SUPPRIME
+// ✅ POST /validate : VALIDER + SUPPRIMER
 // ========================
 app.MapPost("/validate", async (HttpContext ctx) =>
 {
-    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>();
+    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>(ctx.Request.Body);
 
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
 
-    // 1) Enregistrer intervention
+    // 1) enregistrer intervention
     using var insert = con.CreateCommand();
     insert.CommandText = @"
         INSERT INTO Interventions (Machine, Type, Date, User, Description)
@@ -187,7 +180,7 @@ app.MapPost("/validate", async (HttpContext ctx) =>
     insert.Parameters.AddWithValue("$desc", obj["tache"]);
     insert.ExecuteNonQuery();
 
-    // 2) SUPPRIMER LA TÂCHE VALIDÉE
+    // 2) supprimer la tâche du planning cloud
     using var delete = con.CreateCommand();
     delete.CommandText = "DELETE FROM Preventif WHERE Machine=$m AND Tache=$t";
     delete.Parameters.AddWithValue("$m", obj["machine"]);
@@ -197,9 +190,11 @@ app.MapPost("/validate", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
-
-// PAGE MOBILE
+// ========================
+// PAGES
+// ========================
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
 app.Run();
 
