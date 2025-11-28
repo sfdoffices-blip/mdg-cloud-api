@@ -1,1 +1,84 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<title>Nouvelle Intervention</title>
+
+<style>
+body { background: #0d1b2a; color: #fff; font-family: Arial; padding: 10px; }
+input, textarea, select, button {
+    width: 100%;
+    margin: 6px 0;
+    padding: 10px;
+    font-size: 16px;
+}
+button {
+    background: #00c8ff;
+    border: none;
+    border-radius: 6px;
+}
+h2 { color: #64ffda; }
+</style>
+
+</head>
+<body>
+
+<h2>🛠 Nouvelle Intervention</h2>
+
+<label>Machine :</label>
+<select id="machine"></select>
+
+<label>Type :</label>
+<select id="type">
+  <option>Panne</option>
+  <option>Entretien</option>
+  <option>Réparation</option>
+</select>
+
+<label>Description :</label>
+<textarea id="desc" rows="4"></textarea>
+
+<label>Opérateur :</label>
+<input id="user" placeholder="Nom de l'opérateur">
+
+<button onclick="send()">✅ Envoyer</button>
+
+<p id="msg"></p>
+
+<script>
+async function loadMachines() {
+    let res = await fetch("https://mdg-cloud-api.onrender.com/machines");
+    let data = await res.json();
+    let sel = document.getElementById("machine");
+    data.forEach(m => {
+        let opt = document.createElement("option");
+        opt.text = m.nom;
+        sel.add(opt);
+    });
+}
+
+async function send() {
+    let data = {
+        machine: machine.value,
+        type: type.value,
+        description: desc.value,
+        operateur: user.value
+    };
+
+    let res = await fetch("https://mdg-cloud-api.onrender.com/interventions", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(data)
+    });
+
+    document.getElementById("msg").innerText = 
+        res.ok ? "✅ Envoyé !" : "❌ Erreur serveur";
+}
+
+loadMachines();
+</script>
+
+</body>
+</html>
 
