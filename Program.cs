@@ -44,7 +44,7 @@ InitDb();
 // ========================
 app.MapPost("/add", async (HttpContext ctx) =>
 {
-    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
+    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>(ctx.Request.Body);
 
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
