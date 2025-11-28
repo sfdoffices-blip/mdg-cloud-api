@@ -6,23 +6,23 @@
 <title>MDG Mobile</title>
 <style>
 body{font-family:Arial;margin:10px}
-input,select,textarea,button{width:100%;margin:5px 0;padding:8px}
+input,select,textarea,button{width:100%;margin:6px 0;padding:8px}
 .ok{color:green}
 .err{color:red}
-li{margin:6px 0}
+li{margin:8px 0}
 .machine{font-weight:bold}
 .tache{font-style:italic;font-size:0.9em}
 </style>
 </head>
-
 <body>
+
 <h2>MDG Mobile</h2>
 
 <label>Utilisateur</label>
-<input id="user" placeholder="Nom"/>
+<select id="user"></select>
 
 <label>Machine</label>
-<input id="machine" placeholder="Machine"/>
+<select id="machine"></select>
 
 <label>Type</label>
 <select id="type">
@@ -37,12 +37,25 @@ li{margin:6px 0}
 <p id="msg"></p>
 
 <hr>
-
 <h3>Entretiens à faire</h3>
 <button onclick="loadPreventif()">Actualiser</button>
 <ul id="pList"></ul>
 
 <script>
+function fillSelect(url, selectId){
+  fetch(url).then(r=>r.json()).then(list=>{
+    let s = document.getElementById(selectId);
+    s.innerHTML = "";
+    list.forEach(i=>{
+      let o = document.createElement("option");
+      o.text=i; o.value=i; s.add(o);
+    });
+  });
+}
+
+fillSelect("/users","user");
+fillSelect("/machines","machine");
+
 function send(){
   const data = {
     user: user.value,
@@ -52,65 +65,37 @@ function send(){
     date: new Date().toISOString().substring(0,10)
   };
 
-  fetch("/add",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(data)
-  })
-  .then(_=>msg.innerHTML="<span class='ok'>Envoyé ✅</span>")
-  .catch(_=>msg.innerHTML="<span class='err'>Erreur ❌</span>");
+  fetch("/add",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)})
+    .then(_=>msg.innerHTML="<span class='ok'>Envoyé ✅</span>")
+    .catch(_=>msg.innerHTML="<span class='err'>Erreur ❌</span>");
 }
 
-
 function loadPreventif(){
-  fetch("/preventif")
-  .then(r=>r.json())
-  .then(list=>{
+  fetch("/preventif").then(r=>r.json()).then(list=>{
     pList.innerHTML="";
     list.forEach(i=>{
-      let id = i.machine.replace(/\s+/g,"_");
+      let id = (i.machine||"").replace(/\s+/g,"_");
       let li = document.createElement("li");
-
       li.innerHTML = `
-      <div class="machine">${i.machine}</div>
-      ${i.type} - ${i.prochaine}<br>
-      <div class="tache">${i.tache}</div>
-      <select id="op_${id}">
-        <option>Mostapha</option>
-        <option>Jawad</option>
-        <option>Abdelillah</option>
-      </select>
-      <button onclick="valider('${i.machine}','${i.tache.replace(/'/g,"\\'")}')">
-        ✅ Valider
-      </button>
-      <hr>`;
-
+        <div class="machine">${i.machine}</div>
+        ${i.type} - ${i.prochaine}<br>
+        <div class="tache">${i.tache||""}</div>
+        <select id="op_${id}"></select>
+        <button onclick="valider('${i.machine}','${(i.tache||"").replace(/'/g,"\\'")}')">✅ Valider</button>
+        <hr>`;
       pList.appendChild(li);
+      fillSelect("/users","op_"+id);
     });
   });
 }
-
 
 function valider(machine, tache){
   let id = machine.replace(/\s+/g,"_");
   let op = document.getElementById("op_"+id).value;
 
-  let payload = {
-    machine: machine,
-    operateur: op,
-    tache: tache,
-    date: new Date().toISOString().substring(0,10)
-  };
-
-  fetch("/validate",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(payload)
-  })
-  .then(()=>{
-    alert("✅ Entretien validé !");
-    loadPreventif(); // 🔁 recharge pour retirer la tâche
-  });
+  let payload = { machine, operateur: op, tache, date: new Date().toISOString().substring(0,10) };
+  fetch("/validate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})
+    .then(()=>{ alert("✅ Validé"); loadPreventif(); });
 }
 </script>
 
