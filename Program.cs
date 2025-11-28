@@ -38,7 +38,10 @@ void InitDb()
 
 InitDb();
 
-// ---------- INTERVENTIONS MOBILE (déclaration) ----------
+
+// ========================
+// INTERVENTIONS CLASSIQUES
+// ========================
 app.MapPost("/add", async (HttpContext ctx) =>
 {
     var obj = await JsonSerializer.DeserializeAsync<Dictionary<string, string>>(ctx.Request.Body);
@@ -60,7 +63,10 @@ app.MapPost("/add", async (HttpContext ctx) =>
     return Results.Ok();
 });
 
-// ---------- LISTE POUR SYNC PC ----------
+
+// ========================
+// LISTE POUR SYNC PC
+// ========================
 app.MapGet("/list", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -82,21 +88,30 @@ app.MapGet("/list", () =>
             Description = r.GetString(5)
         });
     }
+
     return Results.Json(list);
 });
 
-// ---------- CLEAR CLOUD (après import PC) ----------
+
+// ========================
+// NETTOYAGE CLOUD
+// ========================
 app.MapPost("/clear", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
+
     using var cmd = con.CreateCommand();
     cmd.CommandText = "DELETE FROM Interventions";
     cmd.ExecuteNonQuery();
+
     return Results.Ok();
 });
 
-// ---------- PREVENTIF : PC -> CLOUD ----------
+
+// ========================
+// PRÉVENTIF
+// ========================
 app.MapPost("/preventif", async (HttpContext ctx) =>
 {
     var list = await JsonSerializer.DeserializeAsync<List<Dictionary<string, string>>>(ctx.Request.Body);
@@ -123,11 +138,9 @@ app.MapPost("/preventif", async (HttpContext ctx) =>
             ins.ExecuteNonQuery();
         }
     }
-
     return Results.Ok();
 });
 
-// ---------- PREVENTIF : TELEPHONE <- CLOUD ----------
 app.MapGet("/preventif", () =>
 {
     using var con = new SqliteConnection($"Data Source={db}");
@@ -147,33 +160,46 @@ app.MapGet("/preventif", () =>
             Tache = r.IsDBNull(4) ? "" : r.GetString(4)
         });
     }
+
     return Results.Json(list);
 });
 
-// ---------- VALIDATION DEPUIS TELEPHONE ----------
+
+// ========================
+// ✅ VALIDATION DEPUIS TEL
+// ➜ Enregistre ET SUPPRIME
+// ========================
 app.MapPost("/validate", async (HttpContext ctx) =>
 {
-    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>(ctx.Request.Body);
+    var obj = await JsonSerializer.DeserializeAsync<Dictionary<string,string>>();
 
     using var con = new SqliteConnection($"Data Source={db}");
     con.Open();
 
-    using var cmd = con.CreateCommand();
-    cmd.CommandText = @"
+    // 1) Enregistrer intervention
+    using var insert = con.CreateCommand();
+    insert.CommandText = @"
         INSERT INTO Interventions (Machine, Type, Date, User, Description)
         VALUES ($m,'Entretien',$d,$u,$desc)";
-    cmd.Parameters.AddWithValue("$m", obj["machine"]);
-    cmd.Parameters.AddWithValue("$d", obj["date"]);
-    cmd.Parameters.AddWithValue("$u", obj["operateur"]);
-    cmd.Parameters.AddWithValue("$desc", obj["tache"]);
-    cmd.ExecuteNonQuery();
+    insert.Parameters.AddWithValue("$m", obj["machine"]);
+    insert.Parameters.AddWithValue("$d", obj["date"]);
+    insert.Parameters.AddWithValue("$u", obj["operateur"]);
+    insert.Parameters.AddWithValue("$desc", obj["tache"]);
+    insert.ExecuteNonQuery();
+
+    // 2) SUPPRIMER LA TÂCHE VALIDÉE
+    using var delete = con.CreateCommand();
+    delete.CommandText = "DELETE FROM Preventif WHERE Machine=$m AND Tache=$t";
+    delete.Parameters.AddWithValue("$m", obj["machine"]);
+    delete.Parameters.AddWithValue("$t", obj["tache"]);
+    delete.ExecuteNonQuery();
 
     return Results.Ok();
 });
 
-// ---------- PAGE MOBILE ----------
+
+// PAGE MOBILE
 app.UseDefaultFiles();
 app.UseStaticFiles();
-
 app.Run();
 
